@@ -129,6 +129,7 @@ export default function App() {
   const [adminNick, setAdminNick] = useState("ВеликийОрк");
   const [editingRule, setEditingRule] = useState<number | null>(null);
   const [newRuleText, setNewRuleText] = useState("");
+  const [newEvent, setNewEvent] = useState({ title: "", date: "", desc: "" });
   const [showWelcome, setShowWelcome] = useState(false);
   const [translateLang, setTranslateLang] = useState("ru");
   const [translating, setTranslating] = useState<number | null>(null);
@@ -236,6 +237,27 @@ export default function App() {
   const handleDeleteRule = async (id: number) => {
     setRules(prev => prev.filter(r => r.id !== id));
     await api("rules", "DELETE", undefined, id);
+  };
+
+  const handleAddEvent = async () => {
+    if (!newEvent.title.trim() || !newEvent.date.trim()) return;
+    const ev = await api("events", "POST", { title: newEvent.title.trim(), date: newEvent.date.trim(), desc: newEvent.desc.trim() });
+    if (!ev.error) setEvents(prev => [...prev, ev]);
+    setNewEvent({ title: "", date: "", desc: "" });
+    addNotification("Событие добавлено!");
+  };
+
+  const handleDeleteEvent = async (id: number) => {
+    setEvents(prev => prev.filter(e => e.id !== id));
+    await api("events", "DELETE", undefined, id);
+    addNotification("Событие удалено");
+  };
+
+  const handleDeleteMember = async (id: number, nick: string) => {
+    if (!confirm(`Исключить ${nick} из Орды?`)) return;
+    setMembers(prev => prev.filter(m => m.id !== id));
+    await api("members", "DELETE", undefined, id);
+    addNotification(`${nick} исключён из Орды`);
   };
 
   const getJoinLink = () => {
@@ -748,11 +770,15 @@ export default function App() {
                 </div>
 
                 <div className="horde-card rounded-xl p-6">
-                  <h3 className="font-cinzel text-sm font-semibold mb-4" style={{ color: "hsl(var(--horde-gold))" }}>⚔️ Управление рангами</h3>
-                  <div className="space-y-3">
+                  <h3 className="font-cinzel text-sm font-semibold mb-4" style={{ color: "hsl(var(--horde-gold))" }}>⚔️ Участники и ранги</h3>
+                  <div className="space-y-2">
                     {members.map(member => (
                       <div key={member.id} className="flex items-center gap-3">
-                        <span className="font-cinzel text-sm flex-1">{member.nick}</span>
+                        <div className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0 font-cinzel text-xs font-bold"
+                          style={{ background: `${RANK_COLORS[member.rank] || "#888"}22`, color: RANK_COLORS[member.rank] || "#888" }}>
+                          {member.nick[0]}
+                        </div>
+                        <span className="font-cinzel text-sm flex-1 truncate">{member.nick}</span>
                         <select value={member.rank} onChange={e => handleSetRank(member.id, e.target.value)}
                           className="text-xs font-raleway px-2 py-1.5 rounded-lg outline-none cursor-pointer"
                           style={{ background: "hsl(var(--input))", border: "1px solid hsl(var(--border))", color: RANK_COLORS[member.rank] || "hsl(var(--foreground))" }}>
@@ -760,8 +786,52 @@ export default function App() {
                             <option key={r} value={r}>{r}</option>
                           ))}
                         </select>
+                        <button onClick={() => handleDeleteMember(member.id, member.nick)}
+                          className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0 p-1">
+                          <Icon name="Trash2" size={14} />
+                        </button>
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                <div className="horde-card rounded-xl p-6">
+                  <h3 className="font-cinzel text-sm font-semibold mb-4" style={{ color: "hsl(var(--horde-gold))" }}>📅 Управление событиями</h3>
+                  <div className="space-y-3 mb-4">
+                    {events.map(e => (
+                      <div key={e.id} className="flex items-center justify-between gap-3 p-2 rounded-lg" style={{ background: "hsl(var(--background))" }}>
+                        <div className="flex-1 min-w-0">
+                          <span className="font-cinzel text-xs font-semibold" style={{ color: "hsl(var(--horde-gold))" }}>{e.title}</span>
+                          <span className="text-xs text-muted-foreground font-raleway ml-2">{e.date}</span>
+                          <p className="text-xs text-muted-foreground font-raleway truncate mt-0.5">{e.desc}</p>
+                        </div>
+                        <button onClick={() => handleDeleteEvent(e.id)} className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0 p-1">
+                          <Icon name="Trash2" size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    {events.length === 0 && <p className="text-xs text-muted-foreground font-raleway">Событий пока нет</p>}
+                  </div>
+                  <div className="space-y-2 border-t pt-3" style={{ borderColor: "hsl(var(--border))" }}>
+                    <input value={newEvent.title} onChange={e => setNewEvent(p => ({ ...p, title: e.target.value }))}
+                      placeholder="Название события..."
+                      className="w-full px-3 py-2 rounded-lg text-sm font-raleway outline-none"
+                      style={{ background: "hsl(var(--input))", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))" }} />
+                    <div className="flex gap-2">
+                      <input value={newEvent.date} onChange={e => setNewEvent(p => ({ ...p, date: e.target.value }))}
+                        placeholder="Дата (напр. 01.04.2026)..."
+                        className="flex-1 px-3 py-2 rounded-lg text-sm font-raleway outline-none"
+                        style={{ background: "hsl(var(--input))", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))" }} />
+                    </div>
+                    <div className="flex gap-2">
+                      <input value={newEvent.desc} onChange={e => setNewEvent(p => ({ ...p, desc: e.target.value }))}
+                        placeholder="Описание..."
+                        className="flex-1 px-3 py-2 rounded-lg text-sm font-raleway outline-none"
+                        style={{ background: "hsl(var(--input))", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))" }} />
+                      <button onClick={handleAddEvent} className="horde-btn px-4 py-2 rounded-lg flex-shrink-0">
+                        <Icon name="Plus" size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
 

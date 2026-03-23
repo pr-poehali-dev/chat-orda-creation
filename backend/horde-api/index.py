@@ -148,6 +148,25 @@ def handler(event: dict, context) -> dict:
                 rows = cur.fetchall()
                 return ok([{"id": r[0], "title": r[1], "date": r[2], "desc": r[3]} for r in rows])
 
+            if method == "POST":
+                title = (body.get("title") or "").strip()
+                date = (body.get("date") or "").strip()
+                desc = (body.get("desc") or "").strip()
+                if not title or not date:
+                    return err("title и date обязательны")
+                cur.execute(
+                    f"INSERT INTO {SCHEMA}.events (title, event_date, description) VALUES (%s, %s, %s) RETURNING id",
+                    (title, date, desc)
+                )
+                eid = cur.fetchone()[0]
+                conn.commit()
+                return ok({"id": eid, "title": title, "date": date, "desc": desc})
+
+            if method == "DELETE" and rid_str:
+                cur.execute(f"DELETE FROM {SCHEMA}.events WHERE id=%s", (int(rid_str),))
+                conn.commit()
+                return ok({"deleted": int(rid_str)})
+
         return ok({"status": "ok"})
 
     finally:
