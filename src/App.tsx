@@ -121,7 +121,9 @@ export default function App() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [chatInput, setChatInput] = useState("");
-  const [currentUser, setCurrentUser] = useState<Member | null>(null);
+  const [currentUser, setCurrentUser] = useState<Member | null>(() => {
+    try { const s = localStorage.getItem("horde_user"); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
   const [joinNick, setJoinNick] = useState("");
   const [joinError, setJoinError] = useState("");
   const [adminPass, setAdminPass] = useState("");
@@ -149,6 +151,11 @@ export default function App() {
     const url = new URL(window.location.href);
     if (url.searchParams.get("join") === "1") setPage("join");
     loadAll();
+    const interval = setInterval(async () => {
+      const msgs = await api("messages");
+      if (Array.isArray(msgs)) setMessages(msgs);
+    }, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadAll = async () => {
@@ -174,6 +181,7 @@ export default function App() {
     const result = await api("members", "POST", { nick: joinNick.trim() });
     if (result.error) { setJoinError(result.error); return; }
     setCurrentUser(result);
+    localStorage.setItem("horde_user", JSON.stringify(result));
     setMembers(prev => [...prev, result]);
     const msgs = await api("messages");
     if (Array.isArray(msgs)) setMessages(msgs);
