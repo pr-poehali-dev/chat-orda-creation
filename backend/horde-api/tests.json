@@ -1,0 +1,36 @@
+{
+  "tests": [
+    {
+      "name": "GET members",
+      "method": "GET",
+      "path": "/?resource=members",
+      "expectedStatus": 200,
+      "expectedBody": [],
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET messages",
+      "method": "GET",
+      "path": "/?resource=messages",
+      "expectedStatus": 200,
+      "expectedBody": [],
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET rules",
+      "method": "GET",
+      "path": "/?resource=rules",
+      "expectedStatus": 200,
+      "expectedBody": [],
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET events",
+      "method": "GET",
+      "path": "/?resource=events",
+      "expectedStatus": 200,
+      "expectedBody": [],
+      "bodyMatcher": "partial"
+    }
+  ]
+}

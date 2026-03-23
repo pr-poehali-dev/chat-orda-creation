@@ -1,6 +1,20 @@
 import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
 
+const API_URL = "https://functions.poehali.dev/162ae2ac-2908-4c94-8947-ebec298643c9";
+
+async function api(resource: string, method = "GET", body?: object, id?: number) {
+  const url = new URL(API_URL);
+  url.searchParams.set("resource", resource);
+  if (id !== undefined) url.searchParams.set("id", String(id));
+  const res = await fetch(url.toString(), {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return res.json();
+}
+
 const BANNER_URL = "https://cdn.poehali.dev/projects/08541dfb-d453-4a1d-a11c-0dee9a66584d/files/667d9a4c-804e-447c-a43b-18d0fb5f7405.jpg";
 
 const RANKS = ["Новобранец", "Воин", "Ветеран", "Капитан", "Военачальник", "Глава"];
@@ -45,33 +59,7 @@ interface Event {
   desc: string;
 }
 
-const INITIAL_MEMBERS: Member[] = [
-  { id: 1, nick: "ВеликийОрк", rank: "Глава", joinedAt: "01.01.2024", isOnline: true },
-  { id: 2, nick: "КровавыйТопор", rank: "Военачальник", joinedAt: "05.02.2024", isOnline: true },
-  { id: 3, nick: "ТёмнаяЧума", rank: "Капитан", joinedAt: "10.03.2024", isOnline: false },
-  { id: 4, nick: "ЖелезноеСердце", rank: "Ветеран", joinedAt: "15.04.2024", isOnline: true },
-  { id: 5, nick: "ТеньВолка", rank: "Воин", joinedAt: "20.05.2024", isOnline: false },
-];
 
-const INITIAL_RULES: Rule[] = [
-  { id: 1, text: "Уважай своих союзников — мы одна Орда." },
-  { id: 2, text: "Участвуй в атаках Титанов и Войнах Альянсов." },
-  { id: 3, text: "Не нападай на членов альянса." },
-  { id: 4, text: "Сообщай о своём отсутствии более 3 дней." },
-  { id: 5, text: "Делись ресурсами с союзниками в осадах." },
-];
-
-const INITIAL_EVENTS: Event[] = [
-  { id: 1, title: "Война Альянсов", date: "28.03.2026", desc: "Готовьтесь к битве! Координация в чате." },
-  { id: 2, title: "Осада Титана", date: "25.03.2026", desc: "Все на Титана! Встречаемся в 20:00." },
-  { id: 3, title: "Турнир Героев", date: "30.03.2026", desc: "Индивидуальный турнир, призы победителям." },
-];
-
-const INITIAL_MESSAGES: Message[] = [
-  { id: 1, author: "ВеликийОрк", rank: "Глава", text: "Братья! Орда непобедима! 🔥", time: "10:00" },
-  { id: 2, author: "КровавыйТопор", rank: "Военачальник", text: "Готов к войне!", time: "10:05" },
-  { id: 3, author: "СИСТЕМА", rank: "", text: "ЖелезноеСердце вступил в Орду!", time: "10:10", isSystem: true },
-];
 
 const HISTORY_TEXT = `Альянс ОРДА основан в начале эпохи Puzzles Conquest. Когда тёмные силы угрожали разрушить мир, горстка отважных воинов объединилась под единым знаменем — чёрным черепом на кроваво-красном фоне.
 
@@ -127,10 +115,11 @@ async function translateText(text: string, targetLang: string): Promise<string> 
 
 export default function App() {
   const [page, setPage] = useState<Page>("home");
-  const [members, setMembers] = useState<Member[]>(INITIAL_MEMBERS);
-  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
-  const [rules, setRules] = useState<Rule[]>(INITIAL_RULES);
-  const [events] = useState<Event[]>(INITIAL_EVENTS);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [rules, setRules] = useState<Rule[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
   const [chatInput, setChatInput] = useState("");
   const [currentUser, setCurrentUser] = useState<Member | null>(null);
   const [joinNick, setJoinNick] = useState("");
@@ -157,58 +146,49 @@ export default function App() {
 
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (url.searchParams.get("join") === "1") {
-      setPage("join");
-    }
+    if (url.searchParams.get("join") === "1") setPage("join");
+    loadAll();
   }, []);
+
+  const loadAll = async () => {
+    setLoading(true);
+    const [m, msg, r, e] = await Promise.all([
+      api("members"), api("messages"), api("rules"), api("events"),
+    ]);
+    if (Array.isArray(m)) setMembers(m);
+    if (Array.isArray(msg)) setMessages(msg);
+    if (Array.isArray(r)) setRules(r);
+    if (Array.isArray(e)) setEvents(e);
+    setLoading(false);
+  };
 
   const addNotification = (text: string) => {
     setNotifications(prev => [text, ...prev.slice(0, 9)]);
     setTimeout(() => setNotifications(prev => prev.filter(n => n !== text)), 4000);
   };
 
-  const handleJoin = () => {
+  const handleJoin = async () => {
     if (!joinNick.trim()) { setJoinError("Введи свой ник!"); return; }
     if (joinNick.trim().length < 2) { setJoinError("Ник слишком короткий!"); return; }
-    if (members.find(m => m.nick.toLowerCase() === joinNick.trim().toLowerCase())) {
-      setJoinError("Этот ник уже занят!");
-      return;
-    }
-    const newMember: Member = {
-      id: Date.now(),
-      nick: joinNick.trim(),
-      rank: "Новобранец",
-      joinedAt: new Date().toLocaleDateString("ru-RU"),
-      isOnline: true,
-    };
-    setMembers(prev => [...prev, newMember]);
-    setCurrentUser(newMember);
-    setMessages(prev => [...prev, {
-      id: Date.now(),
-      author: "СИСТЕМА",
-      rank: "",
-      text: `${newMember.nick} вступил в Орду! Добро пожаловать, воин! ⚔️`,
-      time: new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }),
-      isSystem: true,
-    }]);
-    addNotification(`${newMember.nick} вступил в Орду!`);
+    const result = await api("members", "POST", { nick: joinNick.trim() });
+    if (result.error) { setJoinError(result.error); return; }
+    setCurrentUser(result);
+    setMembers(prev => [...prev, result]);
+    const msgs = await api("messages");
+    if (Array.isArray(msgs)) setMessages(msgs);
+    addNotification(`${result.nick} вступил в Орду!`);
     playWelcomeSound();
     setShowWelcome(true);
     setTimeout(() => { setShowWelcome(false); setPage("home"); }, 4000);
     setJoinError("");
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!chatInput.trim() || !currentUser) return;
-    const msg: Message = {
-      id: Date.now(),
-      author: currentUser.nick,
-      rank: currentUser.rank,
-      text: chatInput.trim(),
-      time: new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }),
-    };
-    setMessages(prev => [...prev, msg]);
+    const text = chatInput.trim();
     setChatInput("");
+    const msg = await api("messages", "POST", { author: currentUser.nick, rank: currentUser.rank, text });
+    if (!msg.error) setMessages(prev => [...prev, msg]);
   };
 
   const handleTranslate = async (msgId: number, text: string) => {
@@ -223,34 +203,39 @@ export default function App() {
     if (adminPass === ADMIN_PASSWORD) {
       setAdminUnlocked(true);
       const adminMember = members.find(m => m.rank === "Глава") || members[0];
-      setCurrentUser({ ...adminMember, nick: adminNick });
+      if (adminMember) setCurrentUser({ ...adminMember, nick: adminNick });
     } else {
       alert("Неверный пароль!");
     }
   };
 
-  const handleDeleteMessage = (id: number) => {
+  const handleDeleteMessage = async (id: number) => {
     setMessages(prev => prev.filter(m => m.id !== id));
+    await api("messages", "DELETE", undefined, id);
   };
 
-  const handleSetRank = (memberId: number, rank: string) => {
+  const handleSetRank = async (memberId: number, rank: string) => {
     setMembers(prev => prev.map(m => m.id === memberId ? { ...m, rank } : m));
+    await api("members", "PUT", { rank }, memberId);
     addNotification("Ранг изменён!");
   };
 
-  const handleSaveRule = (id: number, text: string) => {
+  const handleSaveRule = async (id: number, text: string) => {
     setRules(prev => prev.map(r => r.id === id ? { ...r, text } : r));
+    await api("rules", "PUT", { text }, id);
     setEditingRule(null);
   };
 
-  const handleAddRule = () => {
+  const handleAddRule = async () => {
     if (!newRuleText.trim()) return;
-    setRules(prev => [...prev, { id: Date.now(), text: newRuleText.trim() }]);
+    const rule = await api("rules", "POST", { text: newRuleText.trim() });
+    if (!rule.error) setRules(prev => [...prev, rule]);
     setNewRuleText("");
   };
 
-  const handleDeleteRule = (id: number) => {
+  const handleDeleteRule = async (id: number) => {
     setRules(prev => prev.filter(r => r.id !== id));
+    await api("rules", "DELETE", undefined, id);
   };
 
   const getJoinLink = () => {
@@ -278,6 +263,16 @@ export default function App() {
     { id: "history", label: "История", icon: "BookOpen" },
     { id: "admin", label: "Глава", icon: "Crown" },
   ];
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center" style={{ background: "hsl(var(--background))" }}>
+      <div className="text-center">
+        <div className="text-6xl fire-glow mb-4">💀</div>
+        <div className="horde-title text-3xl mb-2">ОРДА</div>
+        <div className="text-sm text-muted-foreground font-raleway animate-pulse">Загрузка...</div>
+      </div>
+    </div>
+  );
 
   return (
     <div className={`min-h-screen text-foreground ${themes[activeTheme]}`}>
@@ -740,8 +735,12 @@ export default function App() {
                     <input value={adminNick} onChange={e => setAdminNick(e.target.value)}
                       className="flex-1 px-3 py-2 rounded-lg text-sm font-raleway outline-none"
                       style={{ background: "hsl(var(--input))", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))" }} />
-                    <button onClick={() => {
-                      setMembers(prev => prev.map(m => m.rank === "Глава" ? { ...m, nick: adminNick } : m));
+                    <button onClick={async () => {
+                      const chief = members.find(m => m.rank === "Глава");
+                      if (chief) {
+                        await api("members", "PUT", { nick: adminNick }, chief.id);
+                        setMembers(prev => prev.map(m => m.rank === "Глава" ? { ...m, nick: adminNick } : m));
+                      }
                       if (currentUser) setCurrentUser({ ...currentUser, nick: adminNick });
                       addNotification("Ник обновлён!");
                     }} className="horde-btn px-4 py-2 rounded-lg text-xs">Сохранить</button>
